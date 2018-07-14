@@ -24,7 +24,7 @@ class CucumberMissingStepsReporter extends EventEmitter {
     this.config = config;
     this.cachedFeatures = {};
     this.options = options;
-    this.snippets = [];
+    this.snippets = {};
 
     this.on('test:pending', this.build);
     this.on('end', this.notify);
@@ -42,21 +42,25 @@ class CucumberMissingStepsReporter extends EventEmitter {
         // Replace placeholders with (.*) - output: "<some_arg>" => "(.*)"
         const title = step.text.replace(/<\w+>/gm, '(.*)');
         // Build JavaScript snippet
-        let snippet = step.keyword.trim() + '(/^' + title + '$/, () => {'.yellow +
-          '// Pending'.white +
-        '});'.yellow;
+        let open = step.keyword.trim() + '(/^' + title + '$/, () => {';
+        let body = '// Pending';
+        let close = '});';
         // Only add unique snippets to log output
-        if (this.snippets.indexOf(snippet) === -1) {
-          this.snippets.push(snippet);
+        if (!this.snippets[title]) {
+          this.snippets[title] = {
+            open, body, close
+          };
         }
       }
     }
   }
 
   notify() {
-    console.log('Please implement the following pending steps:'.white.bold(), '\n');
-    this.snippets.forEach((snippet) => {
-      console.log(snippet, '\n');
+    console.log('Pending steps were detected. Please implement the following:'.white.bold(), '\n');
+    Object.keys(this.snippets).forEach((key) => {
+      console.log(this.snippets[key].open.yellow);
+      console.log(this.snippets[key].body.white);
+      console.log(this.snippets[key].close.yellow, '\n');
     });
   }
 
