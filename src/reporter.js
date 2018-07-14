@@ -5,6 +5,7 @@ const EventEmitter = require('events');
 const fs = require('fs');
 const path = require('path');
 const Gherkin = require('gherkin');
+const colors = require('colors');
 
 class CucumberMissingStepsReporter extends EventEmitter {
 
@@ -34,20 +35,26 @@ class CucumberMissingStepsReporter extends EventEmitter {
     // We can not use spec.title as this contains substituted placeholders (scenario outline data)
     const step = this.getStep(spec.file, this.getLineNumberFromUid(spec.uid));
 
+    // Ignore hooks
     if (step.keyword !== 'After' && step.keyword !== 'Before') {
+      // wdio spec.title contains " (undefined step)" if not implemented. Hook into that.
       if (spec.title.indexOf(' (undefined step)') > -1) {
-        this.snippets.push(
-          step.keyword.trim() + '(/^' + step.text + '$/, () => {\n\t// Implement me!\n});'
-        );
+        // Build JavaScript snippet
+        let snippet = step.keyword.trim() + '(/^' + step.text + '$/, () => {\n\t// Implement me!\n});';
+        // Replace placeholders with (.*) - output: "<some_arg>" => "(.*)"
+        snippet.replace(/<\w+>/gm, '(.*)');
+        // Only add unique snippets to log output
+        if (this.snippets.indexOf(snippet) === -1) {
+          this.snippets.push(snippet);
+        }
       }
     }
   }
 
   notify() {
+    console.log('Please implement the following pending steps:'.yellow, '\n');
     this.snippets.forEach((snippet) => {
-      console.log('\n');
-      console.log('\x1b[33m%s\x1b[0m', snippet);
-      console.log('\n');
+      console.log(snippet.yellow, '\n');
     });
   }
 
