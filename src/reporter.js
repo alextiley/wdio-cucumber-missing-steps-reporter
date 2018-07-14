@@ -56,7 +56,7 @@ class CucumberMissingStepsReporter extends EventEmitter {
   }
 
   notify() {
-    console.log('Pending steps were detected. Please implement the following:'.white.bold(), '\n');
+    console.log('Pending steps were detected. Please implement the following:'.bold, '\n');
     Object.keys(this.snippets).forEach((key) => {
       console.log(this.snippets[key].open.yellow);
       console.log(this.snippets[key].body.white);
