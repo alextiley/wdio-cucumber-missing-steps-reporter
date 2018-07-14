@@ -1,0 +1,32 @@
+{
+  "name": "wdio-cucumber-missing-steps-reporter",
+  "version": "0.0.1",
+  "description": "Reports missing cucumber steps in wdio",
+  "main": "lib/reporter.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "build": "babel src -d lib",
+    "prepublish": "yarn build"
+  },
+  "repository": {
+    "url": "git+https://github.com/alextiley/wdio-cucumber-missing-steps-reporter.git"
+  },
+  "keywords": [
+    "cucumber",
+    "missing",
+    "step",
+    "snippet",
+    "reporter"
+  ],
+  "author": "Alex Tiley",
+  "license": "MIT",
+  "dependencies": {
+    "gherkin": "^5.1.0"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.7.0"
+  }
+}
