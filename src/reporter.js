@@ -39,10 +39,12 @@ class CucumberMissingStepsReporter extends EventEmitter {
     if (step.keyword !== 'After' && step.keyword !== 'Before') {
       // wdio spec.title contains " (undefined step)" if not implemented. Hook into that.
       if (spec.title.indexOf(' (undefined step)') > -1) {
-        // Build JavaScript snippet
-        let snippet = step.keyword.trim() + '(/^' + step.text + '$/, () => {\n\t// Implement me!\n});';
         // Replace placeholders with (.*) - output: "<some_arg>" => "(.*)"
-        snippet.replace(/<\w+>/gm, '(.*)');
+        const title = step.text.replace(/<\w+>/gm, '(.*)');
+        // Build JavaScript snippet
+        let snippet = step.keyword.trim() + '(/^' + title + '$/, () => {'.yellow +
+          '// Pending'.white +
+        '});'.yellow;
         // Only add unique snippets to log output
         if (this.snippets.indexOf(snippet) === -1) {
           this.snippets.push(snippet);
@@ -52,9 +54,9 @@ class CucumberMissingStepsReporter extends EventEmitter {
   }
 
   notify() {
-    console.log('Please implement the following pending steps:'.yellow, '\n');
+    console.log('Please implement the following pending steps:'.white.bold(), '\n');
     this.snippets.forEach((snippet) => {
-      console.log(snippet.yellow, '\n');
+      console.log(snippet, '\n');
     });
   }
 
