@@ -25,6 +25,7 @@ class CucumberMissingStepsReporter extends EventEmitter {
     this.cachedFeatures = {};
     this.options = options;
     this.snippets = {};
+    this.snippetMethods = [];
 
     this.on('test:pending', this.build);
     this.on('end', this.notify);
@@ -35,14 +36,21 @@ class CucumberMissingStepsReporter extends EventEmitter {
     // We can not use spec.title as this contains substituted placeholders (scenario outline data)
     const step = this.getStep(spec.file, this.getLineNumberFromUid(spec.uid));
 
+    if (step === null) {
+      return;
+    }
+
+    let keyword = step.keyword.trim();
+
     // Ignore hooks
-    if (step.keyword !== 'After' && step.keyword !== 'Before') {
+    if (keyword !== 'After' && keyword !== 'Before') {
       // wdio spec.title contains " (undefined step)" if not implemented. Hook into that.
       if (spec.title.indexOf(' (undefined step)') > -1) {
         // Replace placeholders with (.*) - output: "<some_arg>" => "(.*)"
+        // @todo use match, count occurrences and create args for snippet callback method
         const title = step.text.replace(/<\w+>/gm, '(.*)');
         // Build JavaScript snippet
-        let open = step.keyword.trim() + '(/^' + title + '$/, () => {';
+        let open = step.cucumberMethod + '(/^' + title + '$/, () => {';
         let body = '// Pending';
         let close = '});';
         // Only add unique snippets to log output
@@ -51,17 +59,29 @@ class CucumberMissingStepsReporter extends EventEmitter {
             open, body, close
           };
         }
+        if (this.snippetMethods.indexOf(step.cucumberMethod) === -1) {
+          this.snippetMethods.push(step.cucumberMethod);
+        }
       }
     }
   }
 
   notify() {
-    console.log('Pending steps were detected. Please implement the following:'.bold, '\n');
-    Object.keys(this.snippets).forEach((key) => {
-      console.log(this.snippets[key].open.yellow);
-      console.log('\t' + this.snippets[key].body.grey);
-      console.log(this.snippets[key].close.yellow, '\n');
-    });
+    const keys = Object.keys(this.snippets);
+
+    if (keys.length) {
+      console.log('Pending steps were detected. Please implement the following:'.bold, '\n');
+
+      if (this.snippetMethods.length > 0) {
+        console.log(`import { ${this.snippetMethods.sort().join(', ')} } from 'cucumber';`.yellow, '\n');
+      }
+
+      keys.forEach((key) => {
+        console.log(this.snippets[key].open.yellow);
+        console.log(`  ${this.snippets[key].body.grey}`);
+        console.log(this.snippets[key].close.yellow, '\n');
+      });
+    }
   }
 
   /**
@@ -88,18 +108,43 @@ class CucumberMissingStepsReporter extends EventEmitter {
    * @returns {{}}
    */
   getStep(filePath, stepLineNumber) {
-    let step = {};
+    let ret = null;
+    let findParent = false;
     const feature = this.getFeature(filePath);
 
-    feature.children.forEach((scenario) => {
-      scenario.steps.forEach((currStep) => {
-        if (currStep.location.line === stepLineNumber) {
-          step = currStep;
+    // Reverse loop over scenarios and steps so that we can find the correct cucumber method for 'And' and 'But' steps
+    for (let i = feature.children.length - 1; i >= 0; i--) {
+      for (let n = feature.children[i].steps.length - 1; n >= 0; n--) {
+        const step = feature.children[i].steps[n];
+        // Matching step
+        if (ret === null && step.location.line === stepLineNumber) {
+          ret = step;
+          if (ret.keyword.trim() === 'And' || ret.keyword.trim() === 'But') {
+            findParent = true;
+            continue;
+          } else {
+            ret.cucumberMethod = ret.keyword.trim();
+            break;
+          }
         }
-      });
-    });
+        // All steps - find parent keyword if necessary
+        if (findParent === true) {
+          switch (step.keyword.trim()) {
+            case 'Given': case 'When': case 'Then':
+              ret.cucumberMethod = step.keyword.trim();
+              findParent = false;
+          }
+          if (findParent === false) {
+            break;
+          }
+        }
+      }
+      if (ret !== null && findParent === false) {
+        break;
+      }
+    }
 
-    return step;
+    return ret;
   }
 
   /**
