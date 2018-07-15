@@ -1,6 +1,6 @@
 {
   "name": "wdio-cucumber-missing-steps-reporter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reports missing cucumber steps in wdio",
   "main": "lib/reporter.js",
   "directories": {
