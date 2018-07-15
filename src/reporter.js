@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const Gherkin = require('gherkin');
 const colors = require('colors');
+const _ = require('lodash');
 
 class CucumberMissingStepsReporter extends EventEmitter {
 
@@ -27,10 +28,16 @@ class CucumberMissingStepsReporter extends EventEmitter {
     this.snippets = {};
     this.snippetMethods = [];
 
+    this.ARGS_REGEX = /<([^<>]+)>/gm;
+
     this.on('test:pending', this.build);
     this.on('end', this.notify);
   }
 
+  /**
+   * Build a series of snippets for pending, undefined specs
+   * @param spec
+   */
   build(spec) {
     // Get step (and its keyword + text) from .feature file
     // We can not use spec.title as this contains substituted placeholders (scenario outline data)
@@ -40,37 +47,119 @@ class CucumberMissingStepsReporter extends EventEmitter {
       return;
     }
 
-    let keyword = step.keyword.trim();
+    let keyword = step.keyword.trim().toLowerCase();
 
-    // Ignore hooks
-    if (keyword !== 'After' && keyword !== 'Before') {
-      // wdio spec.title contains " (undefined step)" if not implemented. Hook into that.
-      if (spec.title.indexOf(' (undefined step)') > -1) {
-        // Replace placeholders with (.*) - output: "<some_arg>" => "(.*)"
-        // @todo use match, count occurrences and create args for snippet callback method
-        const title = step.text.replace(/<\w+>/gm, '(.*)');
-        // Build JavaScript snippet
-        let open = step.cucumberMethod + '(/^' + title + '$/, () => {';
-        let body = '// Pending';
-        let close = '});';
-        // Only add unique snippets to log output
-        if (!this.snippets[title]) {
-          this.snippets[title] = {
-            open, body, close
-          };
-        }
-        if (this.snippetMethods.indexOf(step.cucumberMethod) === -1) {
-          this.snippetMethods.push(step.cucumberMethod);
-        }
+    if (
+      keyword !== 'after' &&
+      keyword !== 'before' &&
+      this.hasUndefinedStepMessage(spec.title)
+    ) {
+      // Replace arguments with simple regular expression string
+      const title = this.buildTitleFromSpecText(step.text);
+      // Check for arguments to add to method signature
+      const args = this.buildArgumentsFromSpecText(step.text);
+      // Build JavaScript snippet
+      const snippet = this.buildSnippet(step.cucumberMethod, title, args);
+      // Only add unique snippets to log output
+      if (!this.hasSnippet(title)) {
+        this.addSnippet(title, snippet);
+      }
+      if (!this.hasMethod(step.cucumberMethod)) {
+        this.addMethod(step.cucumberMethod);
       }
     }
   }
 
+  /**
+   * Does a snippet by this key already exist in the list of snippets?
+   * @param key
+   * @returns {boolean}
+   */
+  hasSnippet(key) {
+    return (typeof this.snippets[key] !== 'undefined');
+  }
+
+  /**
+   * Does this cucumber method already exist in the list of imports?
+   * @param method
+   * @returns {boolean}
+   */
+  hasMethod(method) {
+    return (this.snippetMethods.indexOf(method) > -1);
+  }
+
+  /**
+   * Add a snippet to the array of logged snippets
+   * @param key
+   * @param snippet
+   */
+  addSnippet(key, snippet) {
+    this.snippets[key] = snippet;
+  }
+
+  /**
+   * Add a cucumber method for output in the generated import statement
+   * @param method
+   */
+  addMethod(method) {
+    this.snippetMethods.push(method);
+  }
+
+  /**
+   * Determines whether a spec title indicates where it is undefined or not
+   * wdio spec.title contains " (undefined step)" if not implemented.
+   * @param title
+   * @returns {boolean}
+   */
+  hasUndefinedStepMessage(title) {
+    return (title.indexOf(' (undefined step)') > -1);
+  }
+
+  /**
+   * Checks spec text for placeholders and creates a string of arguments
+   * @return {string}
+   */
+  buildArgumentsFromSpecText(text) {
+    let match;
+    let args = [];
+    while ((match = this.ARGS_REGEX.exec(text)) !== null) {
+      args.push(_.camelCase(match[1]));
+    }
+    return args.join(', ');
+  }
+
+  /**
+   * Formats a title for the snippet. Replaces placeholders with a simple regular expression.
+   * @param text
+   * @returns {string}
+   */
+  buildTitleFromSpecText(text) {
+    return text.replace(this.ARGS_REGEX, '(.*)');
+  }
+
+  /**
+   * Builds a missing step definition snippet (ES6)
+   * @param method
+   * @param title
+   * @param args
+   * @returns {{open: string, body: string, close: string}}
+   */
+  buildSnippet(method, title, args) {
+    return {
+      open: `${method}(/^${title}$/, (${args}) => {`,
+      body: '  // Pending',
+      close: '});',
+    }
+  }
+
+  /**
+   * Outputs step definition snippets to the console
+   */
   notify() {
     const keys = Object.keys(this.snippets);
 
     if (keys.length) {
-      console.log('Pending steps were detected. Please implement the following:'.bold, '\n');
+      console.log('You can implement step definitions for undefined steps with these snippets:'.bold, '\n');
 
       if (this.snippetMethods.length > 0) {
         console.log(`import { ${this.snippetMethods.sort().join(', ')} } from 'cucumber';`.yellow, '\n');
@@ -78,7 +167,7 @@ class CucumberMissingStepsReporter extends EventEmitter {
 
       keys.forEach((key) => {
         console.log(this.snippets[key].open.yellow);
-        console.log(`  ${this.snippets[key].body.grey}`);
+        console.log(this.snippets[key].body.grey);
         console.log(this.snippets[key].close.yellow, '\n');
       });
     }
