@@ -14,6 +14,9 @@ This project is not clever enough to work out where your app's base directory is
 You'll need to configure this in `wdio.conf.js` by adding the below (or similar):
 
 ```
+  ...
+  reporters: ['dot', 'cucumber-missing-steps'],
+  ...
   reporterOptions: {
     ...
     cucumberMissingStepsReporter: {
