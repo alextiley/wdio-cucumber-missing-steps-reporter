@@ -13,14 +13,6 @@ class CucumberMissingStepsReporter extends EventEmitter {
   constructor(baseReporter, config, options = {}) {
     super();
 
-    if (
-      typeof options.cucumberMissingStepsReporter === 'undefined' ||
-      typeof options.cucumberMissingStepsReporter.baseDir === 'undefined'
-    ) {
-      console.log('Unable to generate missing step snippets: missing reporters.cucumberMissingStepsReporter.baseDir in wdio.conf.js config file.');
-      return;
-    }
-
     this.baseReporter = baseReporter;
     this.config = config;
     this.cachedFeatures = {};
@@ -179,7 +171,7 @@ class CucumberMissingStepsReporter extends EventEmitter {
    * @returns {number|*}
    */
   parseFeature(filePath) {
-    const featurePath = path.join(this.options.cucumberJsonReporter.baseDir, filePath);
+    const featurePath = path.join(process.cwd(), filePath);
     const featureText = fs.readFileSync(featurePath).toString();
     const parser = new Gherkin.Parser(new Gherkin.AstBuilder());
     const scanner = new Gherkin.TokenScanner(featureText);
